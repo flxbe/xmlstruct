@@ -1,0 +1,22 @@
+[tool.poetry]
+name = "xmlstruct"
+version = "0.1.0"
+description = ""
+authors = ["Felix Bernhardt <felix.bernhardt@mailbox.org>"]
+license = "MIT"
+readme = "README.md"
+
+[tool.poetry.dependencies]
+python = "^3.11"
+lxml = "^4.9.3"
+
+
+[tool.poetry.group.dev.dependencies]
+ruff = "^0.1.6"
+pyright = "^1.1.338"
+black = "^23.11.0"
+pytest = "^7.4.3"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
