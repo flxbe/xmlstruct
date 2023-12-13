@@ -14,6 +14,3 @@ Declarative XML (de)serialization using type annotations.
 
 <!-- start quickstart -->
 
-```bash
-pip install xmlstruct
-```
