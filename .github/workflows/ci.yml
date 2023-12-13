@@ -29,7 +29,7 @@ jobs:
         run: python -m pip install poetry
 
       - name: Install dependencies
-        run: poetry install --without dev
+        run: poetry install
 
       - name: Check Formatting
         run: poetry run black --check .
