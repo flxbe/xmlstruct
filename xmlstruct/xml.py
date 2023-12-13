@@ -105,42 +105,20 @@ class XmlParser:
         """
 
         self.expect_child("code")
-        value = self.parse_value("code")
+        value = self.parse_token()
         self.expect_close()
 
         return value
 
-    def parse_token(self, node_tag: str) -> str:
-        return _parse_token(self.parse_value(node_tag))
+    def parse_token(self) -> str:
+        return _parse_token(self.parse_value())
 
-    def parse_optional_token(self) -> str | None:
-        value = self.parse_optional_value()
-        if value is None:
-            return None
-        else:
-            return _parse_token(value)
-
-    def parse_value(self, node_tag: str) -> str:
-        """
-        Parse a single, required value.
-        """
-
-        value = self.parse_optional_value()
-        if value is None:
-            raise EmptyNode(f"{node_tag} should not be empty")
-
-        return value
-
-    def parse_optional_value(self) -> Optional[str]:
+    def parse_value(self) -> str:
         event, element = self.next()
         if event == "start":
             raise UnexpectedChildNodeException(element.tag)
         else:
-            value: str = "".join(element.itertext())
-            if len(value) == 0:
-                return None
-            else:
-                return value
+            return "".join(element.itertext())
 
     def next(self) -> XmlEvent:
         try:

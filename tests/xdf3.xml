@@ -1,0 +1,126 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<xdf:xdatenfelder.stammdatenschema.0102 xmlns:xdf="urn:xoev-de:fim:standard:xdatenfelder_3.0.0">
+    <xdf:header>
+        <xdf:nachrichtID>abcd1234</xdf:nachrichtID>
+        <xdf:erstellungszeitpunkt>2020-09-01T00:00:00.000000Z</xdf:erstellungszeitpunkt>
+    </xdf:header>
+    <xdf:stammdatenschema>
+        <xdf:identifikation>
+            <xdf:id>S12345</xdf:id>
+            <xdf:version>1.0.0</xdf:version>
+        </xdf:identifikation>
+        <xdf:name>Test</xdf:name>
+        <xdf:beschreibung>Eine Beschreibung</xdf:beschreibung>
+        <xdf:definition>Eine Definition</xdf:definition>
+        <xdf:bezug link="some link">Bezug</xdf:bezug>
+        <xdf:freigabestatus listURI="urn:xoev-de:xprozess:codeliste:status" listVersionID="1.0">
+            <code>6</code>
+        </xdf:freigabestatus>
+        <xdf:statusGesetztAm>2023-01-01</xdf:statusGesetztAm>
+        <xdf:statusGesetztDurch>Test</xdf:statusGesetztDurch>
+        <xdf:versionshinweis>Ein Versionshinweis</xdf:versionshinweis>
+        <xdf:veroeffentlichungsdatum>2023-01-01</xdf:veroeffentlichungsdatum>
+        <xdf:letzteAenderung>2020-09-01T00:00:00.000000Z</xdf:letzteAenderung>
+        <xdf:bezeichnung>Eine Bezeichnung</xdf:bezeichnung>
+        <xdf:hilfetext>Ein Hilfetext</xdf:hilfetext>
+        <xdf:ableitungsmodifikationenStruktur listURI="urn:xoev-de:fim:codeliste:xdatenfelder.ableitungsmodifikationenStruktur" listVersionID="1.0">
+            <code>3</code>
+        </xdf:ableitungsmodifikationenStruktur>
+        <xdf:ableitungsmodifikationenRepraesentation listURI="urn:xoev-de:fim:codeliste:xdatenfelder.ableitungsmodifikationenRepraesentation" listVersionID="1.0">
+            <code>1</code>
+        </xdf:ableitungsmodifikationenRepraesentation>
+        <xdf:dokumentsteckbrief>
+            <xdf:id>D12345</xdf:id>
+            <xdf:version>1.0.0</xdf:version>
+        </xdf:dokumentsteckbrief>
+        <xdf:regel>
+            <xdf:identifikation>
+                <xdf:id>R00001</xdf:id>
+                <xdf:version>1.2.0</xdf:version>
+            </xdf:identifikation>
+            <xdf:name>MindestEineAngabe</xdf:name>
+            <xdf:beschreibung></xdf:beschreibung>
+            <xdf:bezug></xdf:bezug>
+            <xdf:fachlicherErsteller>Bundesredaktion</xdf:fachlicherErsteller>
+            <xdf:letzteAenderung>2020-09-01T00:00:00.000000Z</xdf:letzteAenderung>
+            <xdf:typ listURI="urn:xoev-de:fim:codeliste:xdatenfelder.regeltyp" listVersionID="1.0">
+                <code>K</code>
+            </xdf:typ>
+            <xdf:skript>function script() {}</xdf:skript>
+        </xdf:regel>
+        <xdf:struktur>
+            <xdf:anzahl>1:1</xdf:anzahl>
+            <xdf:bezug>Ein Rechtsbezug</xdf:bezug>
+            <xdf:enthaelt>
+                <xdf:datenfeldgruppe>
+                    <xdf:identifikation>
+                        <xdf:id>G00001</xdf:id>
+                        <xdf:version>1.3.0</xdf:version>
+                    </xdf:identifikation>
+                    <xdf:name>Natürliche Person</xdf:name>
+                    <xdf:beschreibung>Eine Beschreibung</xdf:beschreibung>
+                    <xdf:definition>Eine Definition</xdf:definition>
+                    <xdf:bezug link="some link">Bezug</xdf:bezug>
+                    <xdf:freigabestatus listURI="urn:xoev-de:xprozess:codeliste:status" listVersionID="1.0">
+                        <code>6</code>
+                    </xdf:freigabestatus>
+                    <xdf:statusGesetztAm>2023-01-01</xdf:statusGesetztAm>
+                    <xdf:statusGesetztDurch>Test</xdf:statusGesetztDurch>
+                    <xdf:versionshinweis>Ein Versionshinweis</xdf:versionshinweis>
+                    <xdf:veroeffentlichungsdatum>2023-01-01</xdf:veroeffentlichungsdatum>
+                    <xdf:letzteAenderung>2020-09-01T00:00:00.000000Z</xdf:letzteAenderung>
+                    <xdf:bezeichnungEingabe>Natürliche Person</xdf:bezeichnungEingabe>
+                    <xdf:bezeichnungAusgabe>Natürliche Person</xdf:bezeichnungAusgabe>
+                    <xdf:schemaelementart listURI="urn:xoev-de:fim:codeliste:xdatenfelder.schemaelementart" listVersionID="1.0">
+                        <code>ABS</code>
+                    </xdf:schemaelementart>
+                    <xdf:hilfetextEingabe>Hilfetext Eingabe</xdf:hilfetextEingabe>
+                    <xdf:hilfetextAusgabe>Hilfetext Ausgabe</xdf:hilfetextAusgabe>
+                    <xdf:struktur>
+                        <xdf:anzahl>1:1</xdf:anzahl>
+                        <xdf:bezug>Ein Rechtsbezug</xdf:bezug>
+                        <xdf:enthaelt>
+                            <xdf:datenfeld>
+                                <xdf:identifikation>
+                                    <xdf:id>F00001</xdf:id>
+                                    <xdf:version>1.1.0</xdf:version>
+                                </xdf:identifikation>
+                                <xdf:name>Familienname</xdf:name>
+                                <xdf:beschreibung>Eine Beschreibung</xdf:beschreibung>
+                                <xdf:definition>Eine Definition</xdf:definition>
+                                <xdf:bezug link="some link">Bezug</xdf:bezug>
+                                <xdf:freigabestatus listURI="urn:xoev-de:xprozess:codeliste:status" listVersionID="1.0">
+                                    <code>6</code>
+                                </xdf:freigabestatus>
+                                <xdf:statusGesetztAm>2023-01-01</xdf:statusGesetztAm>
+                                <xdf:statusGesetztDurch>Test</xdf:statusGesetztDurch>
+                                <xdf:versionshinweis>Ein Versionshinweis</xdf:versionshinweis>
+                                <xdf:veroeffentlichungsdatum>2023-01-01</xdf:veroeffentlichungsdatum>
+                                <xdf:letzteAenderung>2020-09-01T00:00:00.000000Z</xdf:letzteAenderung>
+                                <xdf:bezeichnungEingabe>Familienname</xdf:bezeichnungEingabe>
+                                <xdf:bezeichnungAusgabe>Familienname</xdf:bezeichnungAusgabe>
+                                <xdf:schemaelementart listURI="urn:xoev-de:fim:codeliste:xdatenfelder.schemaelementart" listVersionID="1.0">
+                                    <code>HAR</code>
+                                </xdf:schemaelementart>
+                                <xdf:hilfetextEingabe>Hilfe Eingabe</xdf:hilfetextEingabe>
+                                <xdf:hilfetextAusgabe>Hilfe Ausgabe</xdf:hilfetextAusgabe>
+                                <xdf:feldart listURI="urn:xoev-de:fim:codeliste:xdatenfelder.feldart" listVersionID="2.0">
+                                    <code>input</code>
+                                </xdf:feldart>
+                                <xdf:datentyp listURI="urn:xoev-de:fim:codeliste:xdatenfelder.datentyp" listVersionID="2.0">
+                                    <code>text</code>
+                                </xdf:datentyp>
+                                <xdf:praezisierung minLength="0" maxLength="1" minValue="0" maxValue="1" pattern="test"></xdf:praezisierung>
+                                <xdf:inhalt>Ein Inhalt</xdf:inhalt>
+                                <xdf:vorbefuellung>
+                                    <code>keine</code>
+                                </xdf:vorbefuellung>
+                            </xdf:datenfeld>
+                        </xdf:enthaelt>
+                    </xdf:struktur>
+                </xdf:datenfeldgruppe>
+            </xdf:enthaelt>
+        </xdf:struktur>
+    </xdf:stammdatenschema>
+</xdf:xdatenfelder.stammdatenschema.0102>
+

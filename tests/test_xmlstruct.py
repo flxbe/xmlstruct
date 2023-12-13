@@ -1,11 +1,13 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Annotated, Optional
 from enum import Enum, IntEnum
-from xmlstruct import Value, derive, NoNamespace
+from xmlstruct import Value, ValueEncoding, derive
+from xmlstruct.xml import XmlElement, XmlParser
 
 
-# TODO: default namespace
 # TODO: Attributes
+
 
 def test_should_parse_primitive_types():
     DATA = b"""
@@ -13,6 +15,7 @@ def test_should_parse_primitive_types():
         <a>A</a>
         <b>1</b>
         <c>1.1</c>
+        <d>2020-09-01T00:00:00.000000Z</d>
     </data>
     """
 
@@ -21,6 +24,7 @@ def test_should_parse_primitive_types():
         a: str
         b: int
         c: float
+        d: datetime
 
     DataEncoding = derive(Data, local_name="data")
 
@@ -30,6 +34,15 @@ def test_should_parse_primitive_types():
         a="A",
         b=1,
         c=1.1,
+        d=datetime(
+            2020,
+            9,
+            1,
+            hour=0,
+            minute=0,
+            second=0,
+            tzinfo=timezone.utc,
+        ),
     )
 
 
@@ -86,8 +99,8 @@ def test_should_parse_optional_fields():
 
     assert instance == Wrapper(
         a="A",
-        b=None,
-        c=None,
+        b="",
+        c="",
         d=None,
     )
 
@@ -164,7 +177,7 @@ def test_should_use_value_config():
     class Schema:
         a: Annotated[str, Value(namespace="urn:test")]
         not_b: Annotated[str, Value(namespace="urn:test", name="b")]
-        c: Annotated[str, Value(namespace=NoNamespace)]
+        c: Annotated[str, Value(namespace=None)]
 
     SchemaEncoding = derive(
         Schema,
@@ -177,6 +190,36 @@ def test_should_use_value_config():
     assert instance == Schema(
         a="A",
         not_b="B",
+        c="C",
+    )
+
+
+def test_should_use_default_namespace():
+    DATA = b"""
+    <test:schema xmlns:test="urn:test">
+        <test:a>A</test:a>
+        <test:b>B</test:b>
+        <c>C</c>
+    </test:schema>
+    """
+
+    @dataclass
+    class Schema:
+        a: Annotated[str, Value(namespace="urn:test")]
+        b: str
+        c: Annotated[str, Value(namespace=None)]
+
+    SchemaEncoding = derive(
+        Schema,
+        local_name="schema",
+        namespace="urn:test",
+    )
+
+    instance = SchemaEncoding.parse(DATA)
+
+    assert instance == Schema(
+        a="A",
+        b="B",
         c="C",
     )
 
@@ -216,3 +259,26 @@ def test_should_parse_enums():
         one=NumericEnum.ONE,
         two=NumericEnum.TWO,
     )
+
+
+def test_should_use_custom_encoding():
+    DATA = b"""
+    <data>
+        <a>1</a>
+    </data>
+    """
+
+    def _decode(_node: XmlElement, parser: XmlParser) -> int:
+        return int(parser.parse_token()) + 1
+
+    IncEncoding = ValueEncoding(target=int, decode=_decode)
+
+    @dataclass
+    class Data:
+        a: Annotated[int, IncEncoding]
+
+    DataEncoding = derive(Data, local_name="data")
+
+    instance = DataEncoding.parse(DATA)
+
+    assert instance == Data(a=2)
