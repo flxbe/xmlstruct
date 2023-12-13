@@ -1,12 +1,52 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Optional
-from enum import IntEnum
+from typing import Optional, TypeVar, Annotated
+from enum import Enum, IntEnum
 
-from xmlstruct import derive
+from xmlstruct import Encoding, ValueEncoding, derive
+from xmlstruct.xml import XmlElement, XmlParser
 
 XDF3_NS = "urn:xoev-de:fim:standard:xdatenfelder_3.0.0"
 XDF3_SCHEMA_MESSAGE = "xdatenfelder.stammdatenschema.0102"
+
+
+E = TypeVar("E", bound=Enum)
+
+
+def create_code_encoding(cls: type[E]) -> Encoding[E]:
+    """
+    Create a specialized encoding to parse nested code items of the form
+
+    ```xml
+    <outer>
+        <code>Actual Value</code>
+    </outer>
+    ```
+
+    directly into an Enum, without needing to parse the nested structure
+    into a custom dataclass with only one member `code`.
+    """
+
+    if issubclass(cls, IntEnum):
+        enum_encoding = ValueEncoding.for_int_enum(cls)
+    else:
+        enum_encoding = ValueEncoding.for_enum(cls)
+
+    def _decode_code(node: XmlElement, parser: XmlParser) -> E:
+        container = enum_encoding.create_value_container()
+
+        while (child := parser.next_child()) is not None:
+            if child.tag == "code":
+                container.parse(child, parser)
+            else:
+                parser.skip_node()
+
+        value = container.unwrap(node.tag)
+        assert value is not None
+
+        return value
+
+    return ValueEncoding(target=cls, decode=_decode_code)
 
 
 class FreigabeStatus(IntEnum):
@@ -24,6 +64,9 @@ class FreigabeStatus(IntEnum):
     VORGESEHEN_ZUM_LOESCHEN = 8
 
 
+FreigabeStatusEncoding = create_code_encoding(FreigabeStatus)
+
+
 @dataclass(slots=True)
 class AllgemeineAngaben:
     # identifier: Identifier
@@ -31,7 +74,7 @@ class AllgemeineAngaben:
     beschreibung: Optional[str]
     definition: Optional[str]
     # bezug: list[Rechtsbezug]
-    freigabestatus: FreigabeStatus
+    freigabestatus: Annotated[FreigabeStatus, FreigabeStatusEncoding]
     # status_gesetzt_am: date | None
     statusGesetztDurch: Optional[str]
     # gueltig_ab: date | None
