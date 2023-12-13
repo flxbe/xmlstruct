@@ -35,7 +35,7 @@ jobs:
         run: poetry run black --check .
 
       - name: Lint
-        run: poetry run pyright bstruct tests 
+        run: poetry run pyright xmlstruct tests 
 
       - name: Test
         run: poetry run pytest
