@@ -67,7 +67,7 @@ class FreigabeStatus(IntEnum):
 FreigabeStatusEncoding = create_code_encoding(FreigabeStatus)
 
 
-@dataclass(slots=True)
+@dataclass
 class AllgemeineAngaben:
     # identifier: Identifier
     name: str
@@ -86,19 +86,19 @@ class AllgemeineAngaben:
     # stichwort: list[Stichwort]
 
 
-@dataclass(slots=True)
+@dataclass
 class Schema(AllgemeineAngaben):
     bezeichnung: str
     hilfetext: Optional[str]
 
 
-@dataclass(slots=True)
+@dataclass
 class MessageHeader:
     nachrichtID: str
     erstellungszeitpunkt: datetime
 
 
-@dataclass(slots=True)
+@dataclass
 class SchemaMessage:
     header: MessageHeader
     stammdatenschema: Schema
