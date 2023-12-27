@@ -4,6 +4,7 @@ from typing import Optional, TypeVar, Annotated
 from enum import Enum, IntEnum
 
 from xmlstruct import Encoding, ValueEncoding, derive
+from xmlstruct.tokenizer import parse
 from xmlstruct.xml import XmlElement, XmlParser
 
 XDF3_NS = "urn:xoev-de:fim:standard:xdatenfelder_3.0.0"
