@@ -3,7 +3,7 @@ Utilities for XML parsing.
 """
 
 from __future__ import annotations
-from typing import Generator, Iterator, Literal, Optional
+from typing import Iterator, Literal, Optional
 from io import BytesIO
 
 import lxml.etree
@@ -43,10 +43,20 @@ class XmlParser:
     Provides a higher-level API supporting the xdf parsers.
     """
 
-    current_line: int = 0
+    __slots__ = ["_iter", "current_line"]
 
     def __init__(self, data: bytes):
-        self._iter = _parse_stream(BytesIO(data))
+        self._iter: Iterator[XmlEvent] = lxml.etree.iterparse(
+            BytesIO(data),
+            events=("start", "end"),
+            dtd_validation=False,
+            load_dtd=False,
+            no_network=True,
+            remove_comments=True,
+            remove_pis=True,
+        )
+
+        self.current_line = 0
 
     def expect_child(self, tag: str) -> XmlElement:
         child = self.next_child()
@@ -86,7 +96,7 @@ class XmlParser:
                 else:
                     depths -= 1
 
-    def parse_code(self) -> str:
+    def parse_code(self) -> str | None:
         """
         Parse the content of the `code` child node.
 
@@ -111,14 +121,28 @@ class XmlParser:
         return value
 
     def parse_token(self) -> str:
-        return _parse_token(self.parse_value())
+        """
+        Parse a value as `xs:token`.
+        This will remove whitespace at the edges of the string, and replace all internal
+        whitespaces with a single space.
+
+        e.g.:
+            "    Some   \n Test "
+        will become:
+            "Some Test"
+
+        See: https://www.w3schools.com/XML/schema_dtypes_string.asp
+        """
+        value = self.parse_value()
+
+        return " ".join(value.split())
 
     def parse_value(self) -> str:
         event, element = self.next()
         if event == "start":
             raise UnexpectedChildNodeException(element.tag)
         else:
-            return "".join(element.itertext())
+            return element.text or ""
 
     def next(self) -> XmlEvent:
         try:
@@ -129,42 +153,6 @@ class XmlParser:
         self.current_line = data.sourceline
 
         return event, data
-
-
-def _parse_token(value: str) -> str:
-    """
-    Parse a value as `xs:token`.
-    This will remove whitespace at the edges of the string, and replace all internal
-    whitespaces with a single space.
-
-    e.g.:
-        "    Some   \n Test "
-    will become:
-        "Some Test"
-
-    See: https://www.w3schools.com/XML/schema_dtypes_string.asp
-    """
-    return " ".join(value.split())
-
-
-def _parse_stream(
-    stream: BytesIO,
-) -> Generator[XmlEvent, None, None]:
-    event_iterator: Iterator[XmlEvent] = lxml.etree.iterparse(
-        stream,
-        events=("start", "end"),
-        dtd_validation=False,
-        load_dtd=False,
-        no_network=True,
-        remove_comments=True,
-        remove_pis=True,
-    )
-
-    for event, data in event_iterator:
-        yield event, data
-
-        if event == "end":
-            data.clear(keep_tail=True)
 
 
 def get_local_name(tag: str) -> str:

@@ -4,7 +4,6 @@ from typing import Optional, TypeVar, Annotated
 from enum import Enum, IntEnum
 
 from xmlstruct import Encoding, ValueEncoding, derive
-from xmlstruct.tokenizer import parse
 from xmlstruct.xml import XmlElement, XmlParser
 
 XDF3_NS = "urn:xoev-de:fim:standard:xdatenfelder_3.0.0"
@@ -111,6 +110,10 @@ SchemaMessageEncoding = derive(
 
 with open("./tests/xdf3.xml", "rb") as f:
     data = f.read()
+
+
+with open("./benchmarks/S60000011V2.1_xdf2.xml", "rb") as file:
+    bob = file.read()
 
 
 def test_xdf3():
