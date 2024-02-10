@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Annotated, Optional
 from enum import Enum, IntEnum
 from xmlstruct import Value, ValueEncoding, derive
-from xmlstruct.xml import XmlElement, XmlParser
+from xmlstruct.xml import XmlElement, parse_token
 
 
 # TODO: Attributes
@@ -268,8 +268,8 @@ def test_should_use_custom_encoding():
     </data>
     """
 
-    def _decode(_node: XmlElement, parser: XmlParser) -> int:
-        return int(parser.parse_token()) + 1
+    def _decode(node: XmlElement) -> int:
+        return int(parse_token(node)) + 1
 
     IncEncoding = ValueEncoding(target=int, decode=_decode)
 

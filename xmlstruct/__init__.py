@@ -7,7 +7,13 @@ import typing
 from typing import Any, Callable, Generic, Optional, TypeVar, Union
 from enum import Enum, IntEnum
 
-from .xml import XmlElement, XmlParser
+from .xml import (
+    UnexpectedChildNodeException,
+    XmlDataSource,
+    XmlElement,
+    parse_token,
+    parse_xml,
+)
 
 
 class XmlStructError(Exception):
@@ -59,7 +65,7 @@ class Value:
 # empty values from the decoder.
 # Values not wrapped in `Optional` are then handled with an
 # extra test for `None` to ensure the value was actually there.
-Decoder = Callable[[XmlElement, XmlParser], T]
+Decoder = Callable[[XmlElement], T]
 # Encoder = Callable[[T, ValueList, ByteOrder], None]
 
 
@@ -81,11 +87,11 @@ class ValueContainer(Generic[T]):
 
         return self._value
 
-    def parse(self, node: XmlElement, parser: XmlParser):
+    def parse(self, node: XmlElement):
         if self._filled:
             raise Exception("Duplicate Value")
 
-        self._value = self._decode(node, parser)
+        self._value = self._decode(node)
         assert self._value is not None
 
         self._filled = True
@@ -99,14 +105,14 @@ class ListContainer(Generic[T]):
     def unwrap(self, _tag_name: str) -> list[T]:
         return self.values
 
-    def parse(self, node: XmlElement, parser: XmlParser):
+    def parse(self, node: XmlElement):
         inner_container = self._inner_encoding.create_value_container()
-        inner_container.parse(node, parser)
+        inner_container.parse(node)
 
         self.values.append(inner_container.unwrap(node.tag))
 
 
-def _none_decoder(_node: XmlElement, _parser: XmlParser) -> Any:
+def _none_decoder(_node: XmlElement) -> Any:
     raise NotImplementedError()
 
 
@@ -121,16 +127,16 @@ class ValueEncoding(Generic[T]):
 
     @staticmethod
     def for_enum(enum_type: type[ENUM]) -> ValueEncoding[ENUM]:
-        def _decode(_node: XmlElement, parser: XmlParser) -> ENUM:
-            raw = parser.parse_token()
+        def _decode(node: XmlElement) -> ENUM:
+            raw = parse_token(node)
             return enum_type(raw)
 
         return ValueEncoding(enum_type, _decode)
 
     @staticmethod
     def for_int_enum(enum_type: type[INT_ENUM]) -> ValueEncoding[INT_ENUM]:
-        def _decode(_node: XmlElement, parser: XmlParser) -> INT_ENUM:
-            raw = parser.parse_token()
+        def _decode(node: XmlElement) -> INT_ENUM:
+            raw = parse_token(node)
             return enum_type(int(raw))
 
         return ValueEncoding(enum_type, _decode)
@@ -166,20 +172,20 @@ class ListEncoding(Generic[T]):
 Encoding = Union[ValueEncoding[T], OptionalEncoding[T], ListEncoding[T]]
 
 
-def _parse_string(_node: XmlElement, parser: XmlParser) -> str:
-    return parser.parse_value()
+def _parse_string(node: XmlElement) -> str:
+    return node.text or ""
 
 
-def _parse_int(_node: XmlElement, parser: XmlParser) -> int:
-    return int(parser.parse_token())
+def _parse_int(node: XmlElement) -> int:
+    return int(parse_token(node))
 
 
-def _parse_float(_node: XmlElement, parser: XmlParser) -> float:
-    return float(parser.parse_token())
+def _parse_float(node: XmlElement) -> float:
+    return float(parse_token(node))
 
 
-def _parse_datetime(_node: XmlElement, parser: XmlParser) -> datetime:
-    return datetime.fromisoformat(parser.parse_token())
+def _parse_datetime(node: XmlElement) -> datetime:
+    return datetime.fromisoformat(parse_token(node))
 
 
 class Encodings:
@@ -194,12 +200,13 @@ class DocumentEncoding(Generic[T]):
         self._encoding = encoding
         self._xml_tag = xml_tag
 
-    def parse(self, data: bytes) -> T:
-        parser = XmlParser(data)
+    def parse(self, data: XmlDataSource) -> T:
+        node = parse_xml(data)
 
-        node = parser.expect_child(self._xml_tag)
+        if node.tag != self._xml_tag:
+            raise UnexpectedChildNodeException(node.tag)
 
-        value = self._encoding.decode(node, parser)
+        value = self._encoding.decode(node)
         if value is None:
             raise Exception(f"Empty node {self._xml_tag}")
 
@@ -306,19 +313,18 @@ def _derive_dataclass(
         field_tag = _get_tag(config, field.name, default_namespace)
         attribute_encodings.append((field_tag, encoding))
 
-    def _decode(_node: XmlElement, parser: XmlParser) -> D:
+    def _decode(node: XmlElement) -> D:
         attributes = {
             xml_tag: encoding.create_value_container()
             for xml_tag, encoding in attribute_encodings
         }
 
-        while (child := parser.next_child()) is not None:
+        for child in node:
             child_parser = attributes.get(child.tag)
             if child_parser is None:
-                parser.skip_node()
                 continue
 
-            child_parser.parse(child, parser)
+            child_parser.parse(child)
 
         return cls(
             *[attributes[xml_tag].unwrap(xml_tag) for xml_tag, _ in attribute_encodings]

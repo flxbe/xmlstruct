@@ -4,7 +4,7 @@ from typing import Optional, TypeVar, Annotated
 from enum import Enum, IntEnum
 
 from xmlstruct import Encoding, ValueEncoding, derive
-from xmlstruct.xml import XmlElement, XmlParser
+from xmlstruct.xml import XmlElement
 
 XDF3_NS = "urn:xoev-de:fim:standard:xdatenfelder_3.0.0"
 XDF3_SCHEMA_MESSAGE = "xdatenfelder.stammdatenschema.0102"
@@ -32,14 +32,12 @@ def create_code_encoding(cls: type[E]) -> Encoding[E]:
     else:
         enum_encoding = ValueEncoding.for_enum(cls)
 
-    def _decode_code(node: XmlElement, parser: XmlParser) -> E:
+    def _decode_code(node: XmlElement) -> E:
         container = enum_encoding.create_value_container()
 
-        while (child := parser.next_child()) is not None:
+        for child in node:
             if child.tag == "code":
-                container.parse(child, parser)
-            else:
-                parser.skip_node()
+                container.parse(child)
 
         value = container.unwrap(node.tag)
         assert value is not None
@@ -108,16 +106,10 @@ SchemaMessageEncoding = derive(
     SchemaMessage, local_name=XDF3_SCHEMA_MESSAGE, namespace=XDF3_NS
 )
 
-with open("./tests/xdf3.xml", "rb") as f:
-    data = f.read()
-
-
-with open("./benchmarks/S60000011V2.1_xdf2.xml", "rb") as file:
-    bob = file.read()
-
 
 def test_xdf3():
-    message = SchemaMessageEncoding.parse(data)
+    with open("./tests/xdf3.xml", "rb") as f:
+        message = SchemaMessageEncoding.parse(f)
 
     assert message == SchemaMessage(
         header=MessageHeader(
