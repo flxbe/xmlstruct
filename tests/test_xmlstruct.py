@@ -271,7 +271,7 @@ def test_should_use_custom_encoding():
     def _decode(node: XmlElement) -> int:
         return int(parse_token(node)) + 1
 
-    IncEncoding = RequiredValueEncoding(target=int, decode=_decode)
+    IncEncoding = RequiredValueEncoding(decode=_decode)
 
     @dataclass
     class Data:

@@ -44,7 +44,7 @@ def create_code_encoding(cls: type[E]) -> Encoding[E]:
 
         return value
 
-    return RequiredValueEncoding(target=cls, decode=_decode_code)
+    return RequiredValueEncoding(decode=_decode_code)
 
 
 class FreigabeStatus(IntEnum):

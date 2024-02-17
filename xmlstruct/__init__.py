@@ -9,7 +9,6 @@ from enum import Enum, IntEnum
 
 from .xml import (
     MissingAttribute,
-    MissingValue,
     UnexpectedChildNodeException,
     XmlDataSource,
     XmlElement,
@@ -169,8 +168,7 @@ INT_ENUM = TypeVar("INT_ENUM", bound=IntEnum)
 
 
 class RequiredValueEncoding(Generic[T]):
-    def __init__(self, target: type[T], decode: ValueDecoder[T]):
-        self.target = target
+    def __init__(self, decode: ValueDecoder[T]):
         self.decode = decode
 
     @staticmethod
@@ -179,7 +177,7 @@ class RequiredValueEncoding(Generic[T]):
             raw = parse_token(node)
             return enum_type(raw)
 
-        return RequiredValueEncoding(enum_type, _decode)
+        return RequiredValueEncoding(_decode)
 
     @staticmethod
     def for_int_enum(enum_type: type[INT_ENUM]) -> RequiredValueEncoding[INT_ENUM]:
@@ -187,7 +185,7 @@ class RequiredValueEncoding(Generic[T]):
             raw = parse_token(node)
             return enum_type(int(raw))
 
-        return RequiredValueEncoding(enum_type, _decode)
+        return RequiredValueEncoding(_decode)
 
     def create_value_container(self) -> ValueContainer[T]:
         return ValueContainer(self.decode)
@@ -277,10 +275,10 @@ def _parse_datetime(node: XmlElement) -> datetime:
 
 
 class Encodings:
-    String = RequiredValueEncoding(str, _parse_string)
-    Integer = RequiredValueEncoding(int, _parse_int)
-    Float = RequiredValueEncoding(float, _parse_float)
-    Datetime = RequiredValueEncoding(datetime, _parse_datetime)
+    String = RequiredValueEncoding(_parse_string)
+    Integer = RequiredValueEncoding(_parse_int)
+    Float = RequiredValueEncoding(_parse_float)
+    Datetime = RequiredValueEncoding(_parse_datetime)
 
 
 class AttributeEncodings:
@@ -424,7 +422,7 @@ def _derive_dataclass(
     # This way, recursive uses of the same dataclass will reuse this
     # encoding, as it is already in the cache.
     # Later, update the decode function with the actual one.
-    class_encoding = RequiredValueEncoding(cls, decode=_none_decoder)
+    class_encoding = RequiredValueEncoding(decode=_none_decoder)
     encoding_cache[cls] = class_encoding
 
     type_hints = typing.get_type_hints(cls, localns=localns)
