@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Annotated, Optional
 from enum import Enum, IntEnum
-from xmlstruct import Value, ValueEncoding, derive
+from xmlstruct import Attribute, Value, RequiredValueEncoding, derive
 from xmlstruct.xml import XmlElement, parse_token
 
 
@@ -271,7 +271,7 @@ def test_should_use_custom_encoding():
     def _decode(node: XmlElement) -> int:
         return int(parse_token(node)) + 1
 
-    IncEncoding = ValueEncoding(target=int, decode=_decode)
+    IncEncoding = RequiredValueEncoding(target=int, decode=_decode)
 
     @dataclass
     class Data:
@@ -282,3 +282,29 @@ def test_should_use_custom_encoding():
     instance = DataEncoding.parse(DATA)
 
     assert instance == Data(a=2)
+
+
+def test_should_parse_attributes():
+    DATA = b"""
+    <test:schema xmlns:test="urn:test" test:a="A" test:b="B" c="C" />
+    """
+
+    @dataclass
+    class Schema:
+        a: Annotated[str, Attribute()]
+        not_b: Annotated[str, Attribute(name="b")]
+        c: Annotated[str, Attribute(namespace=None)]
+
+    SchemaEncoding = derive(
+        Schema,
+        local_name="schema",
+        namespace="urn:test",
+    )
+
+    instance = SchemaEncoding.parse(DATA)
+
+    assert instance == Schema(
+        a="A",
+        not_b="B",
+        c="C",
+    )

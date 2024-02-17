@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Optional, TypeVar, Annotated
 from enum import Enum, IntEnum
 
-from xmlstruct import Encoding, ValueEncoding, derive
+from xmlstruct import Encoding, RequiredValueEncoding, derive
 from xmlstruct.xml import XmlElement
 
 XDF3_NS = "urn:xoev-de:fim:standard:xdatenfelder_3.0.0"
@@ -28,9 +28,9 @@ def create_code_encoding(cls: type[E]) -> Encoding[E]:
     """
 
     if issubclass(cls, IntEnum):
-        enum_encoding = ValueEncoding.for_int_enum(cls)
+        enum_encoding = RequiredValueEncoding.for_int_enum(cls)
     else:
-        enum_encoding = ValueEncoding.for_enum(cls)
+        enum_encoding = RequiredValueEncoding.for_enum(cls)
 
     def _decode_code(node: XmlElement) -> E:
         container = enum_encoding.create_value_container()
@@ -44,7 +44,7 @@ def create_code_encoding(cls: type[E]) -> Encoding[E]:
 
         return value
 
-    return ValueEncoding(target=cls, decode=_decode_code)
+    return RequiredValueEncoding(target=cls, decode=_decode_code)
 
 
 class FreigabeStatus(IntEnum):
