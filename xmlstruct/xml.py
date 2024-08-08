@@ -21,6 +21,7 @@ class MissingValue(ParserException):
     def __init__(self, value_name: str):
         super().__init__(f"Missing value: {value_name}")
 
+
 class MissingAttribute(ParserException):
     def __init__(self, name: str):
         super().__init__(f"Missing attribute: {name}")
