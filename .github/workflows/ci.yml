@@ -32,9 +32,12 @@ jobs:
         run: poetry install
 
       - name: Check Formatting
-        run: poetry run black --check .
+        run: poetry run ruff format --check .
 
-      - name: Lint
+      - name: ruff
+        run: poetry run ruff check .
+
+      - name: Pyright
         run: poetry run pyright xmlstruct tests 
 
       - name: Test
