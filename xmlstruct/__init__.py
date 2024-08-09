@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 import dataclasses
 from inspect import isclass
+import types
 import typing
 from typing import Any, Callable, Generic, Optional, TypeVar, Union
 from enum import Enum, IntEnum
@@ -323,7 +324,7 @@ def derive(
 
 
 def _derive_attribute(
-    attribute_type: Any,
+    attribute_type: type,
     localns: Optional[dict[str, Any]],
     default_namespace: Optional[str],
 ) -> AttributeEncoding[Any]:
@@ -346,7 +347,7 @@ def _derive_attribute(
         return RequiredAttributeEncoding.for_int_enum(attribute_type)
     elif isclass(attribute_type) and issubclass(attribute_type, Enum):
         return RequiredAttributeEncoding.for_enum(attribute_type)
-    elif typing.get_origin(attribute_type) is typing.Union:
+    elif _is_union(attribute_type):
         inner_type, *rest = typing.get_args(attribute_type)
 
         if len(rest) == 1 and rest[0] is type(None):
@@ -361,8 +362,20 @@ def _derive_attribute(
         raise TypeError(f"Missing annotation for type {attribute_type.__name__}")
 
 
+def _is_union(attribute_type: type) -> bool:
+    origin = typing.get_origin(attribute_type)
+
+    return (
+        # Check explicit unions, like `Optional[str]`
+        origin is typing.Union
+        or
+        # Check implicit unions, like `str | None`
+        origin is types.UnionType
+    )
+
+
 def _derive(
-    attribute_type: Any,
+    attribute_type: type,
     encoding_cache: dict[Any, Encoding[Any]],
     localns: Optional[dict[str, Any]],
     default_namespace: Optional[str],
@@ -392,7 +405,7 @@ def _derive(
         return RequiredValueEncoding.for_int_enum(attribute_type)
     elif isclass(attribute_type) and issubclass(attribute_type, Enum):
         return RequiredValueEncoding.for_enum(attribute_type)
-    elif typing.get_origin(attribute_type) is typing.Union:
+    elif _is_union(attribute_type):
         inner_type, *rest = typing.get_args(attribute_type)
 
         if len(rest) == 1 and rest[0] is type(None):

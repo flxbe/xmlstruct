@@ -88,7 +88,7 @@ def test_should_parse_optional_fields():
 
     @dataclass
     class Wrapper:
-        a: Optional[str]
+        a: str | None
         b: Optional[str]
         c: Optional[str]
         d: Optional[str]
@@ -291,7 +291,7 @@ def test_should_parse_attributes():
 
     @dataclass
     class Schema:
-        a: Annotated[str, Attribute()]
+        a: Annotated[str | None, Attribute()]
         not_b: Annotated[str, Attribute(name="b")]
         c: Annotated[str, Attribute(namespace=None)]
 
