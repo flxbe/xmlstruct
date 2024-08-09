@@ -1,12 +1,10 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Annotated, Optional
 from enum import Enum, IntEnum
-from xmlstruct import Attribute, Value, RequiredValueEncoding, derive
+from typing import Annotated, Optional
+
+from xmlstruct import Attribute, RequiredValueEncoding, TextValue, Value, derive
 from xmlstruct.xml import XmlElement, parse_token
-
-
-# TODO: Attributes
 
 
 def test_should_parse_primitive_types():
@@ -99,8 +97,8 @@ def test_should_parse_optional_fields():
 
     assert instance == Wrapper(
         a="A",
-        b="",
-        c="",
+        b=None,
+        c=None,
         d=None,
     )
 
@@ -268,8 +266,12 @@ def test_should_use_custom_encoding():
     </data>
     """
 
-    def _decode(node: XmlElement) -> int:
-        return int(parse_token(node)) + 1
+    def _decode(node: XmlElement) -> int | None:
+        value = node.text
+        if value is None:
+            return None
+
+        return int(parse_token(value)) + 1
 
     IncEncoding = RequiredValueEncoding(decode=_decode)
 
@@ -308,3 +310,34 @@ def test_should_parse_attributes():
         not_b="B",
         c="C",
     )
+
+
+def test_should_parse_attributes_mixed_with_text_value():
+    DATA = b"""
+    <schema a="a">value</schema>
+    """
+
+    @dataclass
+    class Schema:
+        a: Annotated[str, Attribute()]
+        value: Annotated[str, TextValue()]
+
+    SchemaEncoding = derive(Schema, local_name="schema")
+
+    instance = SchemaEncoding.parse(DATA)
+
+    assert instance == Schema(a="a", value="value")
+
+
+def test_should_parse_optional_text_value():
+    DATA = b"<schema />"
+
+    @dataclass
+    class Schema:
+        value: Annotated[str | None, TextValue()]
+
+    SchemaEncoding = derive(Schema, local_name="schema")
+
+    instance = SchemaEncoding.parse(DATA)
+
+    assert instance == Schema(value=None)

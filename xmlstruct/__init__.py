@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime
 import dataclasses
-from inspect import isclass
 import types
 import typing
-from typing import Any, Callable, Generic, Optional, TypeVar, Union
+from datetime import datetime
 from enum import Enum, IntEnum
+from inspect import isclass
+from typing import Any, Callable, Generic, Optional, TypeVar, Union
 
 from .xml import (
     MissingAttribute,
@@ -82,13 +82,21 @@ class Value:
     namespace: Optional[Namespace] = DefaultNamespace
 
 
-# Make the decoder always return an optional field, so
-# that empty of self-closing tags can be interpreted as
-# empty values from the decoder.
-# Values not wrapped in `Optional` are then handled with an
-# extra test for `None` to ensure the value was actually there.
-ValueDecoder = Callable[[XmlElement], T]
-# Encoder = Callable[[T, ValueList, ByteOrder], None]
+@dataclasses.dataclass
+class TextValue:
+    """
+    Annotate a dataclass member as the text value of the node.
+    """
+
+    pass
+
+
+# The ValueDecoder must return an optional result to correctly deal with
+# self-closing tags. When a tag is encountered, the decode function for that tag
+# is called. To deal with optional content in a tag, the actually decoded value
+# can therefore be empty.
+# Required content is checked in the RequiredValueContainer whether it actually exists.
+ValueDecoder = Callable[[XmlElement], T | None]
 
 AttributeDecoder = Callable[[str], T]
 
@@ -98,10 +106,11 @@ class ValueContainer(Generic[T]):
     Container to temporarily store a parsed value.
     """
 
-    __slots__ = ["_value", "_decode"]
+    __slots__ = ["_value", "_filled", "_decode"]
 
     def __init__(self, decode: ValueDecoder[T]):
         self._value: Optional[T] = None
+        self._filled = False
         self._decode = decode
 
     def unwrap(self, tag_name: str) -> T:
@@ -111,11 +120,11 @@ class ValueContainer(Generic[T]):
         return self._value
 
     def parse(self, node: XmlElement):
-        if self._value is not None:
+        if self._filled:
             raise Exception("Duplicate Value")
 
         self._value = self._decode(node)
-        assert self._value is not None
+        self._filled = True
 
 
 class OptionalValueContainer(Generic[T]):
@@ -138,8 +147,6 @@ class OptionalValueContainer(Generic[T]):
             raise Exception("Duplicate Value")
 
         self._value = self._decode(node)
-        assert self._value is not None
-
         self._filled = True
 
 
@@ -174,16 +181,24 @@ class RequiredValueEncoding(Generic[T]):
 
     @staticmethod
     def for_enum(enum_type: type[ENUM]) -> RequiredValueEncoding[ENUM]:
-        def _decode(node: XmlElement) -> ENUM:
-            raw = parse_token(node)
+        def _decode(node: XmlElement) -> ENUM | None:
+            value = node.text
+            if value is None:
+                return None
+
+            raw = parse_token(value)
             return enum_type(raw)
 
         return RequiredValueEncoding(_decode)
 
     @staticmethod
     def for_int_enum(enum_type: type[INT_ENUM]) -> RequiredValueEncoding[INT_ENUM]:
-        def _decode(node: XmlElement) -> INT_ENUM:
-            raw = parse_token(node)
+        def _decode(node: XmlElement) -> INT_ENUM | None:
+            value = node.text
+            if value is None:
+                return None
+
+            raw = parse_token(value)
             return enum_type(int(raw))
 
         return RequiredValueEncoding(_decode)
@@ -239,7 +254,6 @@ class RequiredAttributeEncoding(Generic[T]):
 
     def decode(self, tag_name: str, value: str | None) -> T:
         if value is None:
-            # TODO: somehow insert name
             raise MissingAttribute(tag_name)
 
         return self._decode(value)
@@ -259,20 +273,32 @@ class OptionalAttributeEncoding(Generic[T]):
 AttributeEncoding = Union[RequiredAttributeEncoding[T], OptionalAttributeEncoding[T]]
 
 
-def _parse_string(node: XmlElement) -> str:
-    return node.text or ""
+def _parse_string(node: XmlElement) -> str | None:
+    return node.text
 
 
-def _parse_int(node: XmlElement) -> int:
-    return int(parse_token(node))
+def _parse_int(node: XmlElement) -> int | None:
+    value = node.text
+    if value is None:
+        return None
+
+    return int(parse_token(value))
 
 
-def _parse_float(node: XmlElement) -> float:
-    return float(parse_token(node))
+def _parse_float(node: XmlElement) -> float | None:
+    value = node.text
+    if value is None:
+        return None
+
+    return float(parse_token(value))
 
 
-def _parse_datetime(node: XmlElement) -> datetime:
-    return datetime.fromisoformat(parse_token(node))
+def _parse_datetime(node: XmlElement) -> datetime | None:
+    value = node.text
+    if value is None:
+        return None
+
+    return datetime.fromisoformat(parse_token(value))
 
 
 class Encodings:
@@ -324,7 +350,7 @@ def derive(
 
 
 def _derive_attribute(
-    attribute_type: type,
+    attribute_type: type | typing.ForwardRef,
     localns: Optional[dict[str, Any]],
     default_namespace: Optional[str],
 ) -> AttributeEncoding[Any]:
@@ -332,6 +358,9 @@ def _derive_attribute(
         raise Exception(
             "Do not use 'from __future__ import annotations' in the same file in which 'binary.derive()' is used."
         )
+
+    if type(attribute_type) is typing.ForwardRef:
+        raise Exception(f"Unresolved forward ref: {attribute_type}")
 
     if attribute_type is str:
         return AttributeEncodings.String
@@ -356,8 +385,6 @@ def _derive_attribute(
             )
         else:
             raise TypeError(f"Unknown Union {attribute_type}")
-    elif type(attribute_type) is typing.ForwardRef:
-        raise Exception(f"Unresolved forward ref: {attribute_type}")
     else:
         raise TypeError(f"Missing annotation for type {attribute_type.__name__}")
 
@@ -375,7 +402,7 @@ def _is_union(attribute_type: type) -> bool:
 
 
 def _derive(
-    attribute_type: type,
+    attribute_type: type | typing.ForwardRef,
     encoding_cache: dict[Any, Encoding[Any]],
     localns: Optional[dict[str, Any]],
     default_namespace: Optional[str],
@@ -384,6 +411,9 @@ def _derive(
         raise Exception(
             "Do not use 'from __future__ import annotations' in the same file in which 'binary.derive()' is used."
         )
+
+    if type(attribute_type) is typing.ForwardRef:
+        raise Exception(f"Unresolved forward ref: {attribute_type}")
 
     if attribute_type in encoding_cache:
         return encoding_cache[attribute_type]
@@ -419,8 +449,6 @@ def _derive(
         return ListEncoding(
             _derive(inner_type, encoding_cache, localns, default_namespace)
         )
-    elif type(attribute_type) is typing.ForwardRef:
-        raise Exception(f"Unresolved forward ref: {attribute_type}")
     else:
         raise TypeError(f"Missing annotation for type {attribute_type.__name__}")
 
@@ -432,7 +460,7 @@ def _derive_dataclass(
     default_namespace: Optional[str],
 ) -> Encoding[D]:
     # Create a stub encoding and save it to the cache first.
-    # This way, recursive uses of the same dataclass will reuse this
+    # This way, recursive usage of the same dataclass will reuse this
     # encoding, as it is already in the cache.
     # Later, update the decode function with the actual one.
     class_encoding = RequiredValueEncoding(decode=_none_decoder)
@@ -446,6 +474,7 @@ def _derive_dataclass(
     # TODO: Detect duplicate names
     argument_names: list[str] = []
     value_encodings: dict[str, Encoding[Any]] = {}
+    text_value_encoding: tuple[str, Encoding[Any]] | None = None
     attribute_encodings: dict[str, AttributeEncoding[Any]] = {}
     for field in fields:
         # NOTE(Felix): First extract the optional config for the field.
@@ -464,6 +493,19 @@ def _derive_dataclass(
             field_tag = _get_tag(metadata.value, field.name, default_namespace)
             value_encodings[field_tag] = encoding
             argument_names.append(field_tag)
+        elif isinstance(metadata, TextValueMetadata):
+            if text_value_encoding is not None:
+                raise XmlStructError(f"TextValue can only be used once [{cls}]")
+
+            encoding = metadata.encoding
+            if encoding is None:
+                field_type = type_hints[field.name]
+                encoding = _derive(
+                    field_type, encoding_cache, localns, default_namespace
+                )
+
+            text_value_encoding = (field.name, encoding)
+            argument_names.append(field.name)
         else:
             encoding = metadata.encoding
             if encoding is None:
@@ -492,6 +534,9 @@ def _derive_dataclass(
             for xml_tag, container in value_containers.items()
         }
 
+        if text_value_encoding is not None:
+            arguments[text_value_encoding[0]] = text_value_encoding[1].decode(node)
+
         for attribute_name, encoding in attribute_encodings.items():
             value = node.get(attribute_name)
             arguments[attribute_name] = encoding.decode(attribute_name, value)
@@ -514,14 +559,22 @@ class ValueMetadata(Generic[T]):
     encoding: Optional[Encoding[T]]
 
 
+@dataclasses.dataclass
+class TextValueMetadata(Generic[T]):
+    encoding: Optional[Encoding[T]]
+
+
 def _get_metadata(
     field: dataclasses.Field[T],
-) -> AttributeMetadata[T] | ValueMetadata[T]:
+) -> AttributeMetadata[T] | ValueMetadata[T] | TextValueMetadata[T]:
     config = _get_field_config(field)
 
     if isinstance(config, Value):
         encoding = _get_value_encoding(field)
         return ValueMetadata(value=config, encoding=encoding)
+    elif isinstance(config, TextValue):
+        encoding = _get_value_encoding(field)
+        return TextValueMetadata(encoding=encoding)
     elif isinstance(config, Attribute):
         encoding = _get_attribute_encoding(field)
         return AttributeMetadata(attribute=config, encoding=encoding)
@@ -533,7 +586,9 @@ def _get_metadata(
             return ValueMetadata(value=None, encoding=_get_value_encoding(field))
 
 
-def _get_field_config(field: dataclasses.Field[Any]) -> Union[Value, Attribute, None]:
+def _get_field_config(
+    field: dataclasses.Field[Any],
+) -> Union[Value, Attribute, TextValue, None]:
     if typing.get_origin(field.type) is typing.Annotated:
         _annotated_type, *annotation_args = typing.get_args(field.type)
 
@@ -541,6 +596,8 @@ def _get_field_config(field: dataclasses.Field[Any]) -> Union[Value, Attribute, 
             if isinstance(arg, Value):
                 return arg
             elif isinstance(arg, Attribute):
+                return arg
+            elif isinstance(arg, TextValue):
                 return arg
 
 

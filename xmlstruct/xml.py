@@ -56,7 +56,7 @@ def parse_xml(data: XmlDataSource) -> XmlElement:
         return lxml.etree.parse(data, parser=parser).getroot()
 
 
-def parse_token(node: XmlElement) -> str:
+def parse_token(value: str) -> str:
     """
     Parse a value as `xs:token`.
     This will remove whitespace at the edges of the string, and replace all internal
@@ -69,6 +69,4 @@ def parse_token(node: XmlElement) -> str:
 
     See: https://www.w3schools.com/XML/schema_dtypes_string.asp
     """
-    value = node.text or ""
-
     return " ".join(value.split())
