@@ -1,9 +1,16 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from enum import Enum, IntEnum
-from typing import Annotated, Optional
+from typing import Annotated, Optional, Union
 
-from xmlstruct import Attribute, RequiredValueEncoding, TextValue, Value, derive
+from xmlstruct import (
+    Attribute,
+    RequiredValueEncoding,
+    TextValue,
+    Value,
+    derive,
+    Variant,
+)
 from xmlstruct.xml import XmlElement, parse_token
 
 
@@ -87,7 +94,7 @@ def test_should_parse_optional_fields():
     @dataclass
     class Wrapper:
         a: str | None
-        b: Optional[str]
+        b: None | str
         c: Optional[str]
         d: Optional[str]
 
@@ -100,6 +107,44 @@ def test_should_parse_optional_fields():
         b=None,
         c=None,
         d=None,
+    )
+
+
+def test_should_parse_unions():
+    DATA = b"""
+    <wrapper>
+        <implicit>
+            <a>a</a>
+        </implicit>
+        <explicit>
+            <b>b</b>
+        </explicit>
+    </wrapper>
+    """
+
+    @dataclass
+    class A:
+        value: Annotated[str, TextValue()]
+
+    @dataclass
+    class B:
+        value: Annotated[str, TextValue()]
+
+    @dataclass
+    class Wrapper:
+        implicit: Annotated[A, Variant("a")] | Annotated[B, Variant("b")]
+        explicit: Union[
+            Annotated[A, Variant("a")],
+            Annotated[B, Variant("b")],
+        ]
+
+    WrapperEncoding = derive(Wrapper, local_name="wrapper")
+
+    instance = WrapperEncoding.parse(DATA)
+
+    assert instance == Wrapper(
+        implicit=A("a"),
+        explicit=B("b"),
     )
 
 

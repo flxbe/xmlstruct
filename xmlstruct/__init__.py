@@ -82,6 +82,26 @@ class Value:
     namespace: Optional[Namespace] = DefaultNamespace
 
 
+@dataclasses.dataclass(frozen=True)
+class Variant:
+    """
+    Annotate a Unino variant.
+    Additional configuration of the behaviour is possible.
+
+    ### `namespace`
+
+    Set the namespace of the variant.
+    This is `DefaultNamespace` by default, meaning that the optional global
+    namespace will be used.
+
+    Alternatively, either a `str` containing the actual namespace or
+    `None` can be used to overwrite the global namespace.
+    """
+
+    name: str
+    namespace: Optional[Namespace] = DefaultNamespace
+
+
 @dataclasses.dataclass
 class TextValue:
     """
@@ -359,6 +379,9 @@ def _derive_attribute(
             "Do not use 'from __future__ import annotations' in the same file in which 'binary.derive()' is used."
         )
 
+    if typing.get_origin(attribute_type) is typing.Annotated:
+        attribute_type = typing.get_args(attribute_type)[0]
+
     if type(attribute_type) is typing.ForwardRef:
         raise Exception(f"Unresolved forward ref: {attribute_type}")
 
@@ -377,14 +400,15 @@ def _derive_attribute(
     elif isclass(attribute_type) and issubclass(attribute_type, Enum):
         return RequiredAttributeEncoding.for_enum(attribute_type)
     elif _is_union(attribute_type):
-        inner_type, *rest = typing.get_args(attribute_type)
+        inner_types = typing.get_args(attribute_type)
 
-        if len(rest) == 1 and rest[0] is type(None):
+        optional_type = _get_optional_type(inner_types)
+        if optional_type is not None:
             return OptionalAttributeEncoding(
-                _derive_attribute(inner_type, localns, default_namespace)
+                _derive_attribute(optional_type, localns, default_namespace)
             )
-        else:
-            raise TypeError(f"Unknown Union {attribute_type}")
+
+        raise TypeError(f"Unknown Union {attribute_type}")
     else:
         raise TypeError(f"Missing annotation for type {attribute_type.__name__}")
 
@@ -412,6 +436,9 @@ def _derive(
             "Do not use 'from __future__ import annotations' in the same file in which 'binary.derive()' is used."
         )
 
+    if typing.get_origin(attribute_type) is typing.Annotated:
+        attribute_type = typing.get_args(attribute_type)[0]
+
     if type(attribute_type) is typing.ForwardRef:
         raise Exception(f"Unresolved forward ref: {attribute_type}")
 
@@ -436,14 +463,15 @@ def _derive(
     elif isclass(attribute_type) and issubclass(attribute_type, Enum):
         return RequiredValueEncoding.for_enum(attribute_type)
     elif _is_union(attribute_type):
-        inner_type, *rest = typing.get_args(attribute_type)
+        inner_types = typing.get_args(attribute_type)
 
-        if len(rest) == 1 and rest[0] is type(None):
+        optional_type = _get_optional_type(inner_types)
+        if optional_type is not None:
             return OptionalValueEncoding(
-                _derive(inner_type, encoding_cache, localns, default_namespace)
+                _derive(optional_type, encoding_cache, localns, default_namespace)
             )
-        else:
-            raise TypeError(f"Unknown Union {attribute_type}")
+
+        return _derive_union(inner_types, encoding_cache, localns, default_namespace)
     elif typing.get_origin(attribute_type) is list:
         inner_type = typing.get_args(attribute_type)[0]
         return ListEncoding(
@@ -451,6 +479,53 @@ def _derive(
         )
     else:
         raise TypeError(f"Missing annotation for type {attribute_type.__name__}")
+
+
+def _get_optional_type(inner_types: tuple[Any, ...]) -> type | None:
+    if len(inner_types) != 2:
+        return None
+
+    if inner_types[0] is type(None):
+        return inner_types[1]
+    elif inner_types[1] is type(None):
+        return inner_types[0]
+
+    return None
+
+
+def _derive_union(
+    variants: tuple[Any, ...],
+    encoding_cache: dict[Any, Encoding[Any]],
+    localns: Optional[dict[str, Any]],
+    default_namespace: Optional[str],
+) -> Encoding[T]:
+    variant_encodings: dict[str, Encoding[T]] = {}
+
+    for variant in variants:
+        if typing.get_origin(variant) is not typing.Annotated:
+            raise XmlStructError(f"Missing union variant annotation for {variant}")
+
+        variant_type, *type_args = typing.get_args(variant)
+        variant_tag = _get_variant_tag(type_args, default_namespace)
+        if variant_tag is None:
+            raise XmlStructError(f"Missing union variant annotation for {variant}")
+
+        variant_encodings[variant_tag] = _derive(
+            variant_type, encoding_cache, localns, default_namespace
+        )
+
+    def _decode(node: XmlElement):
+        if len(node) != 1:
+            raise XmlStructError(f"Expected only single child in union {node.tag}")
+
+        child = node[0]
+        variant_encoding = variant_encodings.get(child.tag)
+        if variant_encoding is None:
+            raise XmlStructError(f"Unknown variant {child.tag} in union {node.tag}")
+
+        return variant_encoding.decode(child)
+
+    return RequiredValueEncoding(decode=_decode)
 
 
 def _derive_dataclass(
@@ -466,7 +541,11 @@ def _derive_dataclass(
     class_encoding = RequiredValueEncoding(decode=_none_decoder)
     encoding_cache[cls] = class_encoding
 
-    type_hints = typing.get_type_hints(cls, localns=localns)
+    type_hints = typing.get_type_hints(
+        cls,
+        localns=localns,
+        include_extras=True,
+    )
 
     fields = dataclasses.fields(cls)
 
@@ -649,6 +728,25 @@ def _get_tag(
             local_name=member_name,
             namespace=default_namespace,
         )
+
+
+def _get_variant_tag(
+    type_args: list[Any],
+    default_namespace: Optional[str],
+) -> str | None:
+    for arg in type_args:
+        if isinstance(
+            arg,
+            Variant,
+        ):
+            if isinstance(arg.namespace, _DefaultNamespace):
+                namespace = default_namespace
+            else:
+                namespace = arg.namespace
+
+            return _resolve_full_tag(arg.name, namespace)
+
+    return None
 
 
 def _resolve_full_tag(local_name: str, namespace: Optional[str]) -> str:
