@@ -76,7 +76,8 @@ with open("./benchmarks/S60000011V2.1_xdf2.xml", "rb") as file:
     xml_content = file.read()
 
 start = time.time()
-message = SchemaMessageEncoding.parse(xml_content)
+for _ in range(10):
+    message = SchemaMessageEncoding.parse(xml_content)
 end = time.time()
 
 diff = end - start

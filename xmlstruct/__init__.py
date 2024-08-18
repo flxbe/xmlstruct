@@ -6,7 +6,7 @@ import typing
 from datetime import datetime
 from enum import Enum, IntEnum
 from inspect import isclass
-from typing import Any, Callable, Generic, Optional, TypeVar, Union
+from typing import Any, Callable, Generic, Literal, Optional, TypeVar, Union
 
 from .xml import (
     MissingAttribute,
@@ -121,78 +121,19 @@ ValueDecoder = Callable[[XmlElement], T | None]
 AttributeDecoder = Callable[[str], T]
 
 
-class ValueContainer(Generic[T]):
-    """
-    Container to temporarily store a parsed value.
-    """
-
-    __slots__ = ["_value", "_filled", "_decode"]
-
-    def __init__(self, decode: ValueDecoder[T]):
-        self._value: Optional[T] = None
-        self._filled = False
-        self._decode = decode
-
-    def unwrap(self, tag_name: str) -> T:
-        if self._value is None:
-            raise Exception(f"Missing node {tag_name}")
-
-        return self._value
-
-    def parse(self, node: XmlElement):
-        if self._filled:
-            raise Exception("Duplicate Value")
-
-        self._value = self._decode(node)
-        self._filled = True
-
-
-class OptionalValueContainer(Generic[T]):
-    """
-    Container to temporarily store an optional parsed value.
-    """
-
-    __slots__ = ["_value", "_filled", "_decode"]
-
-    def __init__(self, decode: ValueDecoder[T]):
-        self._value: Optional[T] = None
-        self._filled = False
-        self._decode = decode
-
-    def unwrap(self, _tag_name: str) -> Optional[T]:
-        return self._value
-
-    def parse(self, node: XmlElement):
-        if self._filled:
-            raise Exception("Duplicate Value")
-
-        self._value = self._decode(node)
-        self._filled = True
-
-
-class ListContainer(Generic[T]):
-    __slots__ = ["_inner_encoding", "_values"]
-
-    def __init__(self, inner_encoding: Encoding[T]):
-        self._inner_encoding = inner_encoding
-        self._values: list[Any] = []
-
-    def unwrap(self, _tag_name: str) -> list[T]:
-        return self._values
-
-    def parse(self, node: XmlElement):
-        inner_container = self._inner_encoding.create_value_container()
-        inner_container.parse(node)
-
-        self._values.append(inner_container.unwrap(node.tag))
-
-
 def _none_decoder(_node: XmlElement) -> Any:
     raise NotImplementedError()
 
 
 ENUM = TypeVar("ENUM", bound=Enum)
 INT_ENUM = TypeVar("INT_ENUM", bound=IntEnum)
+
+
+class _NoValue:
+    pass
+
+
+NoValue = _NoValue()
 
 
 class RequiredValueEncoding(Generic[T]):
@@ -223,8 +164,24 @@ class RequiredValueEncoding(Generic[T]):
 
         return RequiredValueEncoding(_decode)
 
-    def create_value_container(self) -> ValueContainer[T]:
-        return ValueContainer(self.decode)
+    def create_empty_value(self) -> None:
+        return None
+
+    def parse(self, current_value: T | None, node: XmlElement) -> T:
+        if current_value is not None:
+            raise Exception(f"Duplicate value {node.tag}")
+
+        current_value = self.decode(node)
+        if current_value is None:
+            raise Exception(f"Missing value {node.tag}")
+
+        return current_value
+
+    def unwrap(self, current_value: T | None, tag_name: str) -> T:
+        if current_value is None:
+            raise Exception(f"Missing value {tag_name}")
+
+        return current_value
 
 
 class OptionalValueEncoding(Generic[T]):
@@ -235,8 +192,20 @@ class OptionalValueEncoding(Generic[T]):
     def decode(self):
         return self._inner_encoding.decode
 
-    def create_value_container(self) -> OptionalValueContainer[T]:
-        return OptionalValueContainer(self._inner_encoding.decode)
+    def create_empty_value(self) -> _NoValue:
+        return NoValue
+
+    def parse(self, current_value: T | None | _NoValue, node: XmlElement) -> T | None:
+        if current_value is not NoValue:
+            raise Exception(f"Duplicate value {node.tag}")
+
+        return self.decode(node)
+
+    def unwrap(self, current_value: T | None | _NoValue, tag_name: str) -> T | None:
+        if current_value is NoValue:
+            return None
+
+        return current_value  # type: ignore
 
 
 class ListEncoding(Generic[T]):
@@ -247,8 +216,19 @@ class ListEncoding(Generic[T]):
     def decode(self):
         return self._inner_encoding.decode
 
-    def create_value_container(self) -> ListContainer[T]:
-        return ListContainer(self._inner_encoding)
+    def create_empty_value(self) -> list[T]:
+        return []
+
+    def parse(self, current_value: list[T], node: XmlElement) -> list[T]:
+        inner_value: Any = self._inner_encoding.create_empty_value()
+        inner_value = self._inner_encoding.parse(inner_value, node)
+        inner_value = self._inner_encoding.unwrap(inner_value, node.tag)
+
+        current_value.append(inner_value)
+        return current_value
+
+    def unwrap(self, current_value: list[T], tag_name: str) -> list[T]:
+        return current_value
 
 
 Encoding = Union[RequiredValueEncoding[T], OptionalValueEncoding[T], ListEncoding[T]]
@@ -552,9 +532,9 @@ def _derive_dataclass(
     # TODO: Somehow distinguish between attributes and values to allow name collisions
     # TODO: Detect duplicate names
     argument_names: list[str] = []
-    value_encodings: dict[str, Encoding[Any]] = {}
+    value_encodings: list[tuple[str, Encoding[Any]]] = []
     text_value_encoding: tuple[str, Encoding[Any]] | None = None
-    attribute_encodings: dict[str, AttributeEncoding[Any]] = {}
+    attribute_encodings: list[tuple[str, AttributeEncoding[Any]]] = []
     for field in fields:
         # NOTE(Felix): First extract the optional config for the field.
         # This uses the `field.type` object, as here `Annotated` is not
@@ -570,7 +550,7 @@ def _derive_dataclass(
                 )
 
             field_tag = _get_tag(metadata.value, field.name, default_namespace)
-            value_encodings[field_tag] = encoding
+            value_encodings.append((field_tag, encoding))
             argument_names.append(field_tag)
         elif isinstance(metadata, TextValueMetadata):
             if text_value_encoding is not None:
@@ -592,31 +572,31 @@ def _derive_dataclass(
                 encoding = _derive_attribute(field_type, localns, default_namespace)
 
             field_tag = _get_tag(metadata.attribute, field.name, default_namespace)
-            attribute_encodings[field_tag] = encoding
+            attribute_encodings.append((field_tag, encoding))
             argument_names.append(field_tag)
 
     def _decode(node: XmlElement) -> D:
-        value_containers = {
-            xml_tag: encoding.create_value_container()
-            for xml_tag, encoding in value_encodings.items()
+        values = {
+            xml_tag: (encoding, encoding.create_empty_value())
+            for xml_tag, encoding in value_encodings
         }
 
         for child in node:
-            child_parser = value_containers.get(child.tag)
-            if child_parser is None:
-                continue
-
-            child_parser.parse(child)
+            value_state = values.get(child.tag)
+            if value_state is not None:
+                encoding, value = value_state
+                value = encoding.parse(value, child)  # type: ignore
+                values[child.tag] = (encoding, value)
 
         arguments = {
-            xml_tag: container.unwrap(xml_tag)
-            for xml_tag, container in value_containers.items()
+            xml_tag: encoding.unwrap(value, xml_tag)  # type: ignore
+            for xml_tag, (encoding, value) in values.items()
         }
 
         if text_value_encoding is not None:
             arguments[text_value_encoding[0]] = text_value_encoding[1].decode(node)
 
-        for attribute_name, encoding in attribute_encodings.items():
+        for attribute_name, encoding in attribute_encodings:
             value = node.get(attribute_name)
             arguments[attribute_name] = encoding.decode(attribute_name, value)
 

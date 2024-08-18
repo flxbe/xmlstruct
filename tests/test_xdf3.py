@@ -33,16 +33,12 @@ def create_code_encoding(cls: type[E]) -> Encoding[E]:
         enum_encoding = RequiredValueEncoding.for_enum(cls)
 
     def _decode_code(node: XmlElement) -> E:
-        container = enum_encoding.create_value_container()
+        assert len(node) == 1
 
-        for child in node:
-            if child.tag == "code":
-                container.parse(child)
+        child = node[0]
+        assert child.tag == "code"
 
-        value = container.unwrap(node.tag)
-        assert value is not None
-
-        return value
+        return enum_encoding.parse(None, child)
 
     return RequiredValueEncoding(decode=_decode_code)
 
