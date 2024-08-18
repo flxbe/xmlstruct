@@ -3,7 +3,7 @@ from __future__ import annotations
 import dataclasses
 import types
 import typing
-from datetime import datetime
+from datetime import datetime, date
 from enum import Enum, IntEnum
 from inspect import isclass
 from typing import Any, Callable, Generic, Optional, TypeVar, Union
@@ -277,6 +277,14 @@ def _parse_string(node: XmlElement) -> str | None:
     return node.text
 
 
+def _parse_token(node: XmlElement) -> str | None:
+    value = node.text
+    if value is None:
+        return None
+
+    return parse_token(value)
+
+
 def _parse_int(node: XmlElement) -> int | None:
     value = node.text
     if value is None:
@@ -301,11 +309,21 @@ def _parse_datetime(node: XmlElement) -> datetime | None:
     return datetime.fromisoformat(parse_token(value))
 
 
+def _parse_date(node: XmlElement) -> date | None:
+    value = node.text
+    if value is None:
+        return None
+
+    return date.fromisoformat(parse_token(value))
+
+
 class Encodings:
     String = RequiredValueEncoding(_parse_string)
+    Token = RequiredValueEncoding(_parse_token)
     Integer = RequiredValueEncoding(_parse_int)
     Float = RequiredValueEncoding(_parse_float)
     Datetime = RequiredValueEncoding(_parse_datetime)
+    Date = RequiredValueEncoding(_parse_date)
 
 
 class AttributeEncodings:
@@ -313,6 +331,7 @@ class AttributeEncodings:
     Integer = RequiredAttributeEncoding(lambda v: int(v))
     Float = RequiredAttributeEncoding(lambda v: float(v))
     Datetime = RequiredAttributeEncoding(lambda v: datetime.fromisoformat(v))
+    Date = RequiredAttributeEncoding(lambda v: date.fromisoformat(v))
 
 
 class DocumentEncoding(Generic[T]):
@@ -373,6 +392,8 @@ def _derive_attribute(
         return AttributeEncodings.Float
     elif attribute_type is datetime:
         return AttributeEncodings.Datetime
+    elif attribute_type is date:
+        return AttributeEncodings.Date
     elif isclass(attribute_type) and issubclass(attribute_type, IntEnum):
         # NOTE(Felix): Check `IntEnum` first, as it is also a subclass
         # of `Enum` and would therefore also fulfill the next condition.
@@ -436,6 +457,8 @@ def _derive(
         return Encodings.Float
     elif attribute_type is datetime:
         return Encodings.Datetime
+    elif attribute_type is date:
+        return Encodings.Date
     elif isclass(attribute_type) and issubclass(attribute_type, IntEnum):
         # NOTE(Felix): Check `IntEnum` first, as it is also a subclass
         # of `Enum` and would therefore also fulfill the next condition.

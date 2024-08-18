@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from enum import Enum, IntEnum
 from typing import Annotated, Optional, Union
 
@@ -21,6 +21,7 @@ def test_should_parse_primitive_types():
         <b>1</b>
         <c>1.1</c>
         <d>2020-09-01T00:00:00.000000Z</d>
+        <e>2020-09-01</e>
     </data>
     """
 
@@ -30,6 +31,7 @@ def test_should_parse_primitive_types():
         b: int
         c: float
         d: datetime
+        e: date
 
     DataEncoding = derive(Data, local_name="data")
 
@@ -48,6 +50,7 @@ def test_should_parse_primitive_types():
             second=0,
             tzinfo=timezone.utc,
         ),
+        e=date(2020, 9, 1),
     )
 
 
