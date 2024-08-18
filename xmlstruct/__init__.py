@@ -6,7 +6,7 @@ import typing
 from datetime import datetime
 from enum import Enum, IntEnum
 from inspect import isclass
-from typing import Any, Callable, Generic, Literal, Optional, TypeVar, Union
+from typing import Any, Callable, Generic, Optional, TypeVar, Union
 
 from .xml import (
     MissingAttribute,
@@ -529,13 +529,11 @@ def _derive_dataclass(
 
     fields = dataclasses.fields(cls)
 
-    # TODO: Somehow distinguish between attributes and values to allow name collisions
     # TODO: Detect duplicate names
-    argument_names: list[str] = []
-    value_encodings: list[tuple[str, Encoding[Any]]] = []
-    text_value_encoding: tuple[str, Encoding[Any]] | None = None
-    attribute_encodings: list[tuple[str, AttributeEncoding[Any]]] = []
-    for field in fields:
+    value_encodings: list[tuple[str, int, Encoding[Any]]] = []
+    text_value_encoding: tuple[int, Encoding[Any]] | None = None
+    attribute_encodings: list[tuple[str, int, AttributeEncoding[Any]]] = []
+    for index, field in enumerate(fields):
         # NOTE(Felix): First extract the optional config for the field.
         # This uses the `field.type` object, as here `Annotated` is not
         # resolved.
@@ -550,8 +548,7 @@ def _derive_dataclass(
                 )
 
             field_tag = _get_tag(metadata.value, field.name, default_namespace)
-            value_encodings.append((field_tag, encoding))
-            argument_names.append(field_tag)
+            value_encodings.append((field_tag, index, encoding))
         elif isinstance(metadata, TextValueMetadata):
             if text_value_encoding is not None:
                 raise XmlStructError(f"TextValue can only be used once [{cls}]")
@@ -563,8 +560,7 @@ def _derive_dataclass(
                     field_type, encoding_cache, localns, default_namespace
                 )
 
-            text_value_encoding = (field.name, encoding)
-            argument_names.append(field.name)
+            text_value_encoding = (index, encoding)
         else:
             encoding = metadata.encoding
             if encoding is None:
@@ -572,35 +568,36 @@ def _derive_dataclass(
                 encoding = _derive_attribute(field_type, localns, default_namespace)
 
             field_tag = _get_tag(metadata.attribute, field.name, default_namespace)
-            attribute_encodings.append((field_tag, encoding))
-            argument_names.append(field_tag)
+            attribute_encodings.append((field_tag, index, encoding))
+
+    empty_values_template = [None] * len(fields)
 
     def _decode(node: XmlElement) -> D:
+        arguments: list[Any] = empty_values_template.copy()
+
         values = {
-            xml_tag: (encoding, encoding.create_empty_value())
-            for xml_tag, encoding in value_encodings
+            xml_tag: (index, encoding, encoding.create_empty_value())
+            for xml_tag, index, encoding in value_encodings
         }
 
         for child in node:
             value_state = values.get(child.tag)
             if value_state is not None:
-                encoding, value = value_state
+                index, encoding, value = value_state
                 value = encoding.parse(value, child)  # type: ignore
-                values[child.tag] = (encoding, value)
+                values[child.tag] = (index, encoding, value)
 
-        arguments = {
-            xml_tag: encoding.unwrap(value, xml_tag)  # type: ignore
-            for xml_tag, (encoding, value) in values.items()
-        }
+        for xml_tag, (index, encoding, value) in values.items():
+            arguments[index] = encoding.unwrap(value, xml_tag)  # type: ignore
 
         if text_value_encoding is not None:
             arguments[text_value_encoding[0]] = text_value_encoding[1].decode(node)
 
-        for attribute_name, encoding in attribute_encodings:
+        for attribute_name, index, encoding in attribute_encodings:
             value = node.get(attribute_name)
-            arguments[attribute_name] = encoding.decode(attribute_name, value)
+            arguments[index] = encoding.decode(attribute_name, value)
 
-        return cls(*[arguments[xml_tag] for xml_tag in argument_names])
+        return cls(*arguments)
 
     class_encoding.decode = _decode
     return class_encoding
