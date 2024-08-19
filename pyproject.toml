@@ -16,6 +16,10 @@ pyright = "^1.1.338"
 pytest = "^8.3.2"
 lxml-stubs = "^0.5.1"
 
+
+[tool.poetry.group.bench.dependencies]
+xsdata = "^24.7"
+
 [build-system]
 requires = ["poetry-core"]
 build-backend = "poetry.core.masonry.api"
