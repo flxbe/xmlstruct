@@ -378,6 +378,10 @@ def _derive_attribute(
             "Do not use 'from __future__ import annotations' in the same file in which 'binary.derive()' is used."
         )
 
+    encoding = _get_attribute_encoding(attribute_type)
+    if encoding is not None:
+        return encoding
+
     if typing.get_origin(attribute_type) is typing.Annotated:
         attribute_type = typing.get_args(attribute_type)[0]
 
@@ -436,6 +440,10 @@ def _derive(
         raise Exception(
             "Do not use 'from __future__ import annotations' in the same file in which 'binary.derive()' is used."
         )
+
+    encoding = _get_value_encoding(attribute_type)
+    if encoding is not None:
+        return encoding
 
     if typing.get_origin(attribute_type) is typing.Annotated:
         attribute_type = typing.get_args(attribute_type)[0]
@@ -544,31 +552,23 @@ def _derive_dataclass(
     class_encoding = RequiredValueEncoding(decode=_none_decoder)
     encoding_cache[cls] = class_encoding
 
+    fields = dataclasses.fields(cls)
     type_hints = typing.get_type_hints(
         cls,
         localns=localns,
         include_extras=True,
     )
 
-    fields = dataclasses.fields(cls)
-
     # TODO: Detect duplicate names
     value_encodings: list[tuple[str, int, Encoding[Any]]] = []
     text_value_encoding: tuple[int, Encoding[Any]] | None = None
     attribute_encodings: list[tuple[str, int, AttributeEncoding[Any]]] = []
     for index, field in enumerate(fields):
-        # NOTE(Felix): First extract the optional config for the field.
-        # This uses the `field.type` object, as here `Annotated` is not
-        # resolved.
-        metadata = _get_metadata(field)
+        field_type = type_hints[field.name]
+        metadata = _get_metadata(field_type)
 
         if isinstance(metadata, ValueMetadata):
-            encoding = metadata.encoding
-            if encoding is None:
-                field_type = type_hints[field.name]
-                encoding = _derive(
-                    field_type, encoding_cache, localns, default_namespace
-                )
+            encoding = _derive(field_type, encoding_cache, localns, default_namespace)
 
             field_tag = _get_tag(metadata.value, field.name, default_namespace)
             value_encodings.append((field_tag, index, encoding))
@@ -576,19 +576,11 @@ def _derive_dataclass(
             if text_value_encoding is not None:
                 raise XmlStructError(f"TextValue can only be used once [{cls}]")
 
-            encoding = metadata.encoding
-            if encoding is None:
-                field_type = type_hints[field.name]
-                encoding = _derive(
-                    field_type, encoding_cache, localns, default_namespace
-                )
+            encoding = _derive(field_type, encoding_cache, localns, default_namespace)
 
             text_value_encoding = (index, encoding)
         else:
-            encoding = metadata.encoding
-            if encoding is None:
-                field_type = type_hints[field.name]
-                encoding = _derive_attribute(field_type, localns, default_namespace)
+            encoding = _derive_attribute(field_type, localns, default_namespace)
 
             field_tag = _get_tag(metadata.attribute, field.name, default_namespace)
             attribute_encodings.append((field_tag, index, encoding))
@@ -629,47 +621,40 @@ def _derive_dataclass(
 @dataclasses.dataclass
 class AttributeMetadata(Generic[T]):
     attribute: Optional[Attribute]
-    encoding: Optional[AttributeEncoding[T]]
 
 
 @dataclasses.dataclass
 class ValueMetadata(Generic[T]):
     value: Optional[Value]
-    encoding: Optional[Encoding[T]]
 
 
 @dataclasses.dataclass
 class TextValueMetadata(Generic[T]):
-    encoding: Optional[Encoding[T]]
+    pass
 
 
 def _get_metadata(
-    field: dataclasses.Field[T],
+    field_type: type[T],
 ) -> AttributeMetadata[T] | ValueMetadata[T] | TextValueMetadata[T]:
-    config = _get_field_config(field)
+    config = _get_field_config(field_type)
 
     if isinstance(config, Value):
-        encoding = _get_value_encoding(field)
-        return ValueMetadata(value=config, encoding=encoding)
+        return ValueMetadata(value=config)
     elif isinstance(config, TextValue):
-        encoding = _get_value_encoding(field)
-        return TextValueMetadata(encoding=encoding)
+        return TextValueMetadata()
     elif isinstance(config, Attribute):
-        encoding = _get_attribute_encoding(field)
-        return AttributeMetadata(attribute=config, encoding=encoding)
+        return AttributeMetadata(attribute=config)
     else:
-        encoding = _get_attribute_encoding(field)
+        encoding = _get_attribute_encoding(field_type)
         if encoding is not None:
-            return AttributeMetadata(attribute=None, encoding=encoding)
+            return AttributeMetadata(attribute=None)
         else:
-            return ValueMetadata(value=None, encoding=_get_value_encoding(field))
+            return ValueMetadata(value=None)
 
 
-def _get_field_config(
-    field: dataclasses.Field[Any],
-) -> Union[Value, Attribute, TextValue, None]:
-    if typing.get_origin(field.type) is typing.Annotated:
-        _annotated_type, *annotation_args = typing.get_args(field.type)
+def _get_field_config(field_type: type[T]) -> Union[Value, Attribute, TextValue, None]:
+    if typing.get_origin(field_type) is typing.Annotated:
+        _annotated_type, *annotation_args = typing.get_args(field_type)
 
         for arg in annotation_args:
             if isinstance(arg, Value):
@@ -681,10 +666,10 @@ def _get_field_config(
 
 
 def _get_value_encoding(
-    field: dataclasses.Field[T],
+    value_type: Any,
 ) -> Optional[Encoding[T]]:
-    if typing.get_origin(field.type) is typing.Annotated:
-        _annotated_type, *annotation_args = typing.get_args(field.type)
+    if typing.get_origin(value_type) is typing.Annotated:
+        _annotated_type, *annotation_args = typing.get_args(value_type)
 
         for arg in annotation_args:
             if isinstance(
@@ -694,11 +679,9 @@ def _get_value_encoding(
                 return arg
 
 
-def _get_attribute_encoding(
-    field: dataclasses.Field[T],
-) -> Optional[AttributeEncoding[T]]:
-    if typing.get_origin(field.type) is typing.Annotated:
-        _annotated_type, *annotation_args = typing.get_args(field.type)
+def _get_attribute_encoding(attribute_type: Any) -> Optional[AttributeEncoding[T]]:
+    if typing.get_origin(attribute_type) is typing.Annotated:
+        _annotated_type, *annotation_args = typing.get_args(attribute_type)
 
         for arg in annotation_args:
             if isinstance(

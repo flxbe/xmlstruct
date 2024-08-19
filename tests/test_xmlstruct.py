@@ -5,6 +5,7 @@ from typing import Annotated, Optional, Union
 
 from xmlstruct import (
     Attribute,
+    RequiredAttributeEncoding,
     RequiredValueEncoding,
     TextValue,
     Value,
@@ -210,6 +211,36 @@ def test_should_parse_lists():
     assert instance == List(items=["A", "B", "C"])
 
 
+def test_should_parse_list_with_custom_item_encoding():
+    DATA = b"""
+    <list>
+        <item>1</item>
+    </list>
+    """
+
+    def _decode(node: XmlElement) -> int | None:
+        value = node.text
+        if value is None:
+            return None
+
+        return int(parse_token(value)) + 1
+
+    IncEncoding = RequiredValueEncoding(decode=_decode)
+
+    @dataclass
+    class List:
+        item: list[Annotated[int, IncEncoding]]
+
+    ListEncoding = derive(
+        List,
+        local_name="list",
+    )
+
+    instance = ListEncoding.parse(DATA)
+
+    assert instance == List(item=[2])
+
+
 def test_should_use_value_config():
     DATA = b"""
     <test:schema xmlns:test="urn:test">
@@ -358,6 +389,25 @@ def test_should_parse_attributes():
         not_b="B",
         c="C",
     )
+
+
+def test_should_use_custom_attribute_encoding():
+    DATA = b'<data a="1" />'
+
+    def _decode(str) -> int:
+        return int(str) + 1
+
+    IncEncoding = RequiredAttributeEncoding(decode=_decode)
+
+    @dataclass
+    class Data:
+        a: Annotated[int, IncEncoding]
+
+    DataEncoding = derive(Data, local_name="data")
+
+    instance = DataEncoding.parse(DATA)
+
+    assert instance == Data(a=2)
 
 
 def test_should_parse_attributes_mixed_with_text_value():
